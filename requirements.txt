@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydicom
+numpy
+pillow
+pylibjpeg
+pylibjpeg-libjpeg
+supabase
+python-dotenv
+requests

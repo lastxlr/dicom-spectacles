@@ -1,0 +1,14 @@
+# Environment variables -- contains the Supabase secret key, must never
+# be committed.
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local test artifacts (not part of the deployed service)
+test_input/
+test_output/
+test_output2/
