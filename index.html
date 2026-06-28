@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Educational MRI &amp; CT Scans — AR Viewer</title>
+<style>
+  :root {
+    --bg: #0c0f12;
+    --panel: #14181d;
+    --panel-border: #232a32;
+    --text: #e4e8eb;
+    --text-dim: #8a929b;
+    --accent: #4fd1c5;
+    --accent-dim: #2a5c57;
+    --error: #e0664f;
+    --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 640px;
+  }
+
+  header {
+    margin-bottom: 36px;
+  }
+
+  header .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+
+  header h1 {
+    font-size: 26px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+    max-width: 480px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  /* ---------- drop zone ---------- */
+
+  .dropzone {
+    border: 1.5px dashed var(--panel-border);
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .dropzone:hover,
+  .dropzone.dragover {
+    border-color: var(--accent);
+    background: rgba(79, 209, 197, 0.05);
+  }
+
+  .dropzone .icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+    color: var(--text-dim);
+  }
+
+  .dropzone .main-text {
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+
+  .dropzone .main-text strong {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .dropzone .sub-text {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  #file-input { display: none; }
+
+  .file-summary {
+    margin-top: 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    display: none;
+  }
+
+  .file-summary.visible { display: block; }
+
+  /* ---------- buttons ---------- */
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 11px 22px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+  }
+
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #08312d;
+  }
+
+  .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+
+  .btn-row {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* ---------- status / progress ---------- */
+
+  .status-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--panel-border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- series list ---------- */
+
+  .series-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 20px 0;
+  }
+
+  .series-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .series-item:hover { border-color: #354048; }
+
+  .series-item.selected {
+    border-color: var(--accent);
+    background: rgba(79, 209, 197, 0.06);
+  }
+
+  .series-item.limit-reached {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .series-item.limit-reached:hover {
+    border-color: var(--panel-border);
+  }
+
+  .series-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .series-info { flex: 1; min-width: 0; }
+
+  .series-desc {
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .series-meta {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--panel-border);
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .badge.truncated {
+    background: rgba(224, 102, 79, 0.15);
+    color: var(--error);
+  }
+
+  /* ---------- result screen ---------- */
+
+  .result-id {
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-align: center;
+    padding: 28px 0;
+    background: rgba(79, 209, 197, 0.06);
+    border: 1px solid var(--accent-dim);
+    border-radius: 8px;
+    margin: 20px 0;
+    user-select: all;
+  }
+
+  .result-hint {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: -8px;
+    margin-bottom: 4px;
+  }
+
+  .result-id.result-password {
+    font-size: 30px;
+    padding: 22px 0;
+  }
+
+  /* ---------- error ---------- */
+
+  .error-box {
+    border: 1px solid var(--error);
+    background: rgba(224, 102, 79, 0.08);
+    border-radius: 7px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--error);
+    margin-top: 16px;
+  }
+
+  /* ---------- helpers ---------- */
+
+  .hidden { display: none !important; }
+
+  footer {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  footer code {
+    font-family: var(--mono);
+    background: var(--panel);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Educational MRI &amp; CT Scans AR Viewer</div>
+    <h1>Upload a scan</h1>
+    <p>Upload your DICOM (.dcm) files. We'll convert them into image slices
+       and give you a short code to enter on Spectacles.</p>
+  </header>
+
+  <!-- ============== STEP 1: upload ============== -->
+  <section id="step-upload" class="panel">
+    <div id="dropzone" class="dropzone">
+      <div class="icon">&#8593;</div>
+      <div class="main-text"><strong>Choose files</strong> or drag and drop</div>
+      <div class="sub-text">.dcm files only &middot; multiple files allowed</div>
+    </div>
+    <input type="file" id="file-input" multiple accept=".dcm">
+    <div id="file-summary" class="file-summary"></div>
+
+    <div class="btn-row">
+      <button id="upload-btn" class="btn btn-primary" disabled>Upload &amp; convert</button>
+    </div>
+
+    <div id="upload-error" class="error-box hidden"></div>
+  </section>
+
+  <!-- ============== STEP 2: processing ============== -->
+  <section id="step-processing" class="panel hidden">
+    <div class="status-line">
+      <div class="spinner"></div>
+      <span id="processing-text">Converting DICOM files into slices&hellip;</span>
+    </div>
+  </section>
+
+  <!-- ============== STEP 3: select series ============== -->
+  <section id="step-select" class="panel hidden">
+    <p style="margin-top:0; font-size: 14px; color: var(--text-dim);">
+      Found <span id="series-count">0</span> series. Select up to <span id="max-series-display">6</span> to load on Spectacles.
+    </p>
+    <div id="series-list" class="series-list"></div>
+    <div class="btn-row">
+      <button id="select-btn" class="btn btn-primary" disabled>Send to Spectacles</button>
+    </div>
+    <div id="select-error" class="error-box hidden"></div>
+  </section>
+
+  <!-- ============== STEP 4: uploading to storage ============== -->
+  <section id="step-uploading" class="panel hidden">
+    <div class="status-line">
+      <div class="spinner"></div>
+      <span>Uploading selected series&hellip;</span>
+    </div>
+  </section>
+
+  <!-- ============== STEP 5: done ============== -->
+  <section id="step-done" class="panel hidden">
+    <p style="margin-top:0; font-size: 14px; color: var(--text-dim);">
+      Your code is ready. Enter both on Spectacles to load the scan.
+    </p>
+    <div class="result-id" id="result-id">------</div>
+    <div class="result-hint">ID &middot; tap to select</div>
+    <div class="result-id result-password" id="result-password">----</div>
+    <div class="result-hint">Password &middot; tap to select</div>
+    <div class="btn-row" style="justify-content: center;">
+      <button id="restart-btn" class="btn btn-primary">Upload another scan</button>
+    </div>
+  </section>
+
+  <footer>
+    Backend: <code id="backend-url-display"></code>
+  </footer>
+
+</div>
+
+<script>
+// =====================================================================
+// Configuration
+// =====================================================================
+// Change this to your backend URL once deployed (e.g. on Render).
+// For local testing, this points at the local uvicorn server.
+const BACKEND_URL = "https://dicom-spectacles-backend.onrender.com";
+
+// Must match MAX_SELECTED_SERIES in main.py on the backend.
+const MAX_SELECTED_SERIES = 6;
+
+document.getElementById("backend-url-display").textContent = BACKEND_URL;
+document.getElementById("max-series-display").textContent = MAX_SELECTED_SERIES;
+
+// =====================================================================
+// State
+// =====================================================================
+let selectedFiles = [];
+let currentTaskId = null;
+let currentPassword = null;
+let seriesData = [];
+let selectedFolders = new Set();
+let pollTimer = null;
+
+// =====================================================================
+// Step visibility helper
+// =====================================================================
+const steps = ["step-upload", "step-processing", "step-select", "step-uploading", "step-done"];
+function showStep(stepId) {
+  steps.forEach(id => {
+    document.getElementById(id).classList.toggle("hidden", id !== stepId);
+  });
+}
+
+// =====================================================================
+// STEP 1: file selection (drag & drop / file picker)
+// =====================================================================
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("file-input");
+const fileSummary = document.getElementById("file-summary");
+const uploadBtn = document.getElementById("upload-btn");
+const uploadError = document.getElementById("upload-error");
+
+dropzone.addEventListener("click", () => fileInput.click());
+
+dropzone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dropzone.classList.add("dragover");
+});
+
+dropzone.addEventListener("dragleave", () => {
+  dropzone.classList.remove("dragover");
+});
+
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropzone.classList.remove("dragover");
+  handleFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener("change", () => {
+  handleFiles(fileInput.files);
+});
+
+function handleFiles(fileList) {
+  const allFiles = Array.from(fileList);
+  const dcmFiles = allFiles.filter(f => f.name.toLowerCase().endsWith(".dcm"));
+  const rejectedCount = allFiles.length - dcmFiles.length;
+
+  selectedFiles = dcmFiles;
+
+  if (selectedFiles.length === 0) {
+    fileSummary.textContent = "No .dcm files found in the selection.";
+    fileSummary.classList.add("visible");
+    uploadBtn.disabled = true;
+    return;
+  }
+
+  let summaryText = `${selectedFiles.length} .dcm file${selectedFiles.length === 1 ? "" : "s"} selected`;
+  if (rejectedCount > 0) {
+    summaryText += ` (${rejectedCount} non-.dcm file${rejectedCount === 1 ? "" : "s"} ignored)`;
+  }
+  fileSummary.textContent = summaryText;
+  fileSummary.classList.add("visible");
+  uploadBtn.disabled = false;
+  hideError(uploadError);
+}
+
+function showError(el, message) {
+  el.textContent = message;
+  el.classList.remove("hidden");
+}
+
+function hideError(el) {
+  el.classList.add("hidden");
+}
+
+// =====================================================================
+// STEP 1 -> STEP 2: upload files, start polling
+// =====================================================================
+uploadBtn.addEventListener("click", async () => {
+  if (selectedFiles.length === 0) return;
+
+  uploadBtn.disabled = true;
+  hideError(uploadError);
+
+  const formData = new FormData();
+  selectedFiles.forEach(file => formData.append("files", file));
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Upload failed (HTTP ${res.status})`);
+    }
+
+    const data = await res.json();
+    currentTaskId = data.id;
+    currentPassword = data.password;
+
+    showStep("step-processing");
+    pollStatus();
+  } catch (err) {
+    showError(uploadError, err.message || "Could not reach the server. Is the backend running?");
+    uploadBtn.disabled = false;
+  }
+});
+
+// =====================================================================
+// Polling /status
+// =====================================================================
+function pollStatus() {
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/status/${currentTaskId}`);
+      if (!res.ok) {
+        throw new Error(`Status check failed (HTTP ${res.status})`);
+      }
+      const data = await res.json();
+      handleStatusUpdate(data);
+    } catch (err) {
+      clearInterval(pollTimer);
+      showStep("step-upload");
+      showError(uploadError, err.message || "Lost connection to the server.");
+      uploadBtn.disabled = false;
+    }
+  }, 1500);
+}
+
+function handleStatusUpdate(data) {
+  if (data.status === "processing") {
+    return; // keep waiting
+  }
+
+  if (data.status === "selecting") {
+    clearInterval(pollTimer);
+    seriesData = data.series;
+    renderSeriesList();
+    showStep("step-select");
+    return;
+  }
+
+  if (data.status === "uploading") {
+    showStep("step-uploading");
+    return;
+  }
+
+  if (data.status === "ready") {
+    clearInterval(pollTimer);
+    document.getElementById("result-id").textContent = currentTaskId;
+    document.getElementById("result-password").textContent = currentPassword;
+    showStep("step-done");
+    return;
+  }
+
+  if (data.status === "error") {
+    clearInterval(pollTimer);
+    showStep("step-upload");
+    showError(uploadError, data.error || "Conversion failed on the server.");
+    uploadBtn.disabled = false;
+    return;
+  }
+}
+
+// =====================================================================
+// STEP 3: render series checkboxes
+// =====================================================================
+const seriesList = document.getElementById("series-list");
+const seriesCount = document.getElementById("series-count");
+const selectBtn = document.getElementById("select-btn");
+const selectError = document.getElementById("select-error");
+
+function renderSeriesList() {
+  selectedFolders = new Set();
+  seriesCount.textContent = seriesData.length;
+  seriesList.innerHTML = "";
+
+  seriesData.forEach(series => {
+    const item = document.createElement("label");
+    item.className = "series-item";
+    item.dataset.folder = series.folder_name;
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.addEventListener("change", () => toggleSeries(series.folder_name, item, checkbox.checked));
+
+    const info = document.createElement("div");
+    info.className = "series-info";
+
+    const desc = document.createElement("div");
+    desc.className = "series-desc";
+    desc.textContent = series.series_description || series.modality;
+
+    const meta = document.createElement("div");
+    meta.className = "series-meta";
+    meta.textContent = `${series.modality} \u00b7 ${series.slice_count} slices`;
+
+    info.appendChild(desc);
+    info.appendChild(meta);
+
+    item.appendChild(checkbox);
+    item.appendChild(info);
+
+    if (series.truncated) {
+      const badge = document.createElement("span");
+      badge.className = "badge truncated";
+      badge.textContent = "truncated";
+      item.appendChild(badge);
+    }
+
+    seriesList.appendChild(item);
+  });
+
+  selectBtn.disabled = true;
+  hideError(selectError);
+}
+
+function toggleSeries(folderName, itemEl, isChecked) {
+  if (isChecked) {
+    selectedFolders.add(folderName);
+    itemEl.classList.add("selected");
+  } else {
+    selectedFolders.delete(folderName);
+    itemEl.classList.remove("selected");
+  }
+  selectBtn.disabled = selectedFolders.size === 0;
+  updateSeriesLimitState();
+}
+
+function updateSeriesLimitState() {
+  const atLimit = selectedFolders.size >= MAX_SELECTED_SERIES;
+  document.querySelectorAll(".series-item").forEach(item => {
+    const checkbox = item.querySelector("input[type=checkbox]");
+    const isAlreadyChecked = checkbox.checked;
+    checkbox.disabled = atLimit && !isAlreadyChecked;
+    item.classList.toggle("limit-reached", atLimit && !isAlreadyChecked);
+  });
+}
+
+// =====================================================================
+// STEP 3 -> STEP 4: send selection
+// =====================================================================
+selectBtn.addEventListener("click", async () => {
+  selectBtn.disabled = true;
+  hideError(selectError);
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/select/${currentTaskId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder_names: Array.from(selectedFolders) }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.detail || `Selection failed (HTTP ${res.status})`);
+    }
+
+    showStep("step-uploading");
+    pollStatus();
+  } catch (err) {
+    showError(selectError, err.message || "Could not reach the server.");
+    selectBtn.disabled = false;
+  }
+});
+
+// =====================================================================
+// STEP 5: restart
+// =====================================================================
+document.getElementById("restart-btn").addEventListener("click", () => {
+  selectedFiles = [];
+  currentTaskId = null;
+  currentPassword = null;
+  seriesData = [];
+  selectedFolders = new Set();
+  fileInput.value = "";
+  fileSummary.classList.remove("visible");
+  uploadBtn.disabled = true;
+  showStep("step-upload");
+});
+
+// Clicking the ID or password box selects its text for easy copying.
+function selectElementText(el) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+document.getElementById("result-id").addEventListener("click", (e) => selectElementText(e.target));
+document.getElementById("result-password").addEventListener("click", (e) => selectElementText(e.target));
+</script>
+
+</body>
+</html>
